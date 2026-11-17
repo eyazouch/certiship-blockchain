@@ -1,148 +1,153 @@
-# CertiShip — Certification des dates d'expédition et d'arrivée par Blockchain
+# CertiShip
 
-Application web de traçabilité. Le fournisseur déclare l'expédition d'un produit, puis un opérateur de l'usine confirme son arrivée. Chaque événement est horodaté par la blockchain Ethereum et associé à une empreinte SHA-256 chaînée au produit précédent.
+Certification des dates d'expédition et d'arrivée de produits par la blockchain Ethereum.
 
-- **Smart Contract** : [contracts/src/ShipmentRegistry.sol](contracts/src/ShipmentRegistry.sol)
-- **Documentation technique** : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- **Diagrammes UML** : [docs/UML.md](docs/UML.md)
-- **Guide d'utilisation** (installation, MetaMask, utilisation par profil) : [docs/GUIDE_UTILISATION.md](docs/GUIDE_UTILISATION.md)
-- **Rapport de tests** : [docs/RAPPORT_TESTS.md](docs/RAPPORT_TESTS.md)
+Un fournisseur déclare l'expédition d'un produit, un opérateur de l'usine confirme sa réception. Chaque événement est horodaté on-chain et lié à une empreinte SHA-256 chaînée au produit précédent, ce qui permet de détecter toute modification ultérieure des données.
 
-## Prérequis
+![Produit arrivé, intégrité vérifiée](docs/captures/B15-produit-arrive-integrite-ok.png)
 
-| Outil | Version | Installation |
-|---|---|---|
-| Node.js | ≥ 22.13 (base `node:sqlite`) | <https://nodejs.org> |
-| Foundry | `forge`, `anvil`, `cast` | Dans Git Bash : `curl -L https://foundry.paradigm.xyz \| bash` puis `foundryup` |
-| MetaMask | extension navigateur | <https://metamask.io> |
+## Fonctionnement
 
-## Démarrage en local (Anvil)
+1. Le fournisseur saisit le produit. Le backend calcule son empreinte SHA-256, qui inclut l'empreinte du produit précédent.
+2. Le fournisseur signe la transaction `registerShipment` avec MetaMask. Le contrat vérifie son rôle, le numéro attendu et le chaînage, puis enregistre l'horodatage.
+3. L'opérateur confirme la réception avec `confirmArrival`. Une seconde confirmation est rejetée par le contrat.
+4. À tout moment, la vérification d'intégrité recalcule l'empreinte depuis la base et la compare à celle ancrée sur la blockchain.
 
-### 1. Installer les dépendances
+Le backend ne détient aucune clé privée : chaque acteur signe avec son propre portefeuille, et le contrat reste la seule autorité sur les droits d'expédition et de réception. Les choix de conception sont détaillés dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-```bash
-cd contracts && forge install foundry-rs/forge-std && cd ..
+## Stack technique
+
+| Couche | Technologies |
+|---|---|
+| Smart contract | Solidity 0.8.24, Foundry (tests unitaires, fuzzing, invariants) |
+| Backend | Node.js 22, Express, SQLite (`node:sqlite`), viem |
+| Frontend | React 18, Vite, wagmi, viem |
+| Réseaux | Anvil (local), Sepolia (réseau de test public) |
+
+## Structure du dépôt
+
+```
+contracts/   Smart contract ShipmentRegistry, tests et script de déploiement Foundry
+backend/     API REST : authentification, empreintes, base SQLite, synchronisation avec la chaîne
+frontend/    Interface web et signature des transactions via MetaMask
+scripts/     Déploiement local et Sepolia, script de falsification pour la démo
+docs/        Architecture, UML, guide d'utilisation, rapport de tests, captures
 ```
 
+## Démarrage en local
+
+### Prérequis
+
+- [Node.js](https://nodejs.org) 22.13 ou plus récent
+- [Foundry](https://book.getfoundry.sh/getting-started/installation) (`forge`, `anvil`, `cast`)
+- L'extension [MetaMask](https://metamask.io)
+
+### Installation
+
 ```bash
-cd backend && npm install && cd ..
+git clone --recurse-submodules https://github.com/eyazouch/certiship-blockchain.git
+cd certiship-blockchain
+npm install --prefix backend
+npm install --prefix frontend
 ```
 
-```bash
-cd frontend && npm install && cd ..
-```
+### Lancement
 
-### 2. Lancer la blockchain locale (terminal 1)
+Dans trois terminaux séparés :
 
 ```bash
+# 1. Blockchain locale
 anvil
 ```
 
-### 3. Déployer le contrat (terminal 2)
-
 ```bash
+# 2. Déploiement du contrat, création des comptes de démo, API
 node scripts/deploy-local.mjs
-```
-
-Ce script déploie `ShipmentRegistry` et autorise les comptes Anvil n°1 et n°3 comme fournisseurs et le n°2 comme opérateur. Il écrit ensuite `CONTRACT_ADDRESS` et `DEPLOY_BLOCK` dans `backend/.env`.
-
-### 4. Créer les comptes et lancer l'API
-
-```bash
 cd backend && npm run seed:demo && npm start
 ```
 
-### 5. Lancer le frontend (terminal 3)
-
 ```bash
+# 3. Interface web
 cd frontend && npm run dev
 ```
 
-Ouvrir <http://localhost:5173>.
+L'application est disponible sur http://localhost:5173.
 
-### 6. Configurer MetaMask
+Le script de déploiement autorise les comptes Anvil 1 et 3 comme fournisseurs et le compte 2 comme opérateur, puis renseigne `CONTRACT_ADDRESS` et `DEPLOY_BLOCK` dans `backend/.env`.
 
-1. Ajouter le réseau **Anvil** : RPC `http://127.0.0.1:8545`, Chain ID `31337`, symbole `ETH`.
-2. Importer les comptes de test d'Anvil (clés privées affichées au lancement d'`anvil`) :
+### MetaMask
 
-| Compte applicatif | Mot de passe | Compte Anvil | Rôle |
+Ajouter le réseau Anvil (RPC `http://127.0.0.1:8545`, chain ID `31337`, symbole `ETH`), puis importer les clés privées affichées au lancement d'`anvil`.
+
+| Compte | Mot de passe | Compte Anvil | Rôle |
 |---|---|---|---|
-| `admin@demo.local` | `Admin1234!` | n°0 | Administrateur du contrat |
-| `fournisseur@demo.local` | `Demo1234!` | n°1 | Fournisseur |
-| `operateur@demo.local` | `Demo1234!` | n°2 | Opérateur |
-| `fournisseur2@demo.local` | `Demo1234!` | n°3 | Fournisseur |
+| `admin@demo.local` | `Admin1234!` | 0 | Administrateur |
+| `fournisseur@demo.local` | `Demo1234!` | 1 | Fournisseur |
+| `operateur@demo.local` | `Demo1234!` | 2 | Opérateur |
+| `fournisseur2@demo.local` | `Demo1234!` | 3 | Fournisseur |
 
-> Ces comptes et clés sont publics. Ils ne servent **que** sur Anvil.
-
-Si Anvil est redémarré, MetaMask peut afficher une erreur de *nonce*. Dans ce cas, aller dans *Paramètres → Avancé → Effacer les données d'activité*.
+Ces identifiants et ces clés sont publics et ne doivent servir que sur Anvil. Après un redémarrage d'Anvil, si MetaMask signale une erreur de nonce : *Paramètres > Avancé > Effacer les données d'activité*.
 
 ## Tests
 
 ```bash
-cd contracts && forge test -vv
+cd contracts && forge test -vv     # smart contract
+cd contracts && forge coverage     # couverture
+cd backend && npm test             # API
 ```
 
-```bash
-cd backend && npm test
-```
+Les huit scénarios du cahier des charges sont couverts :
 
-```bash
-cd contracts && forge coverage
-```
-
-### Correspondance avec les scénarios du cahier des charges
-
-| Scénario | Smart Contract (`forge test`) | Backend (`npm test`) |
+| Scénario | Smart contract | Backend |
 |---|---|---|
-| 1. Expédition valide | `test_RegisterShipment_Valid` | « Test 1 » |
-| 2. Fournisseur non autorisé | `test_RevertWhen_UnauthorizedSupplier`, `testFuzz_RevertWhen_UnauthorizedCaller` | « Test 2 » |
-| 3. Arrivée valide | `test_ConfirmArrival_Valid` | « Test 3 » |
-| 4. Double confirmation | `test_RevertWhen_DoubleArrival` | « Test 4 » |
-| 5. Produit inexistant | `test_RevertWhen_ArrivalUnknownProduct`, `testFuzz_RevertWhen_ArrivalOnUnknownId` | « Test 5 » |
-| 6. Modification des données | — (hors chaîne) | « Test 6 » |
-| 7. Transactions simultanées | `test_ConcurrentShipments_SecondIsRejectedThenRetried` | « Test 7 » |
-| 8. Échec de la base | — (hors chaîne) | « Test 8 » |
-| Invariants | `invariant_ChainIsContinuous`, `invariant_StatusConsistency` | — |
+| 1. Expédition valide | `test_RegisterShipment_Valid` | Test 1 |
+| 2. Fournisseur non autorisé | `test_RevertWhen_UnauthorizedSupplier`, `testFuzz_RevertWhen_UnauthorizedCaller` | Test 2 |
+| 3. Arrivée valide | `test_ConfirmArrival_Valid` | Test 3 |
+| 4. Double confirmation | `test_RevertWhen_DoubleArrival` | Test 4 |
+| 5. Produit inexistant | `test_RevertWhen_ArrivalUnknownProduct`, `testFuzz_RevertWhen_ArrivalOnUnknownId` | Test 5 |
+| 6. Modification des données | hors chaîne | Test 6 |
+| 7. Transactions simultanées | `test_ConcurrentShipments_SecondIsRejectedThenRetried` | Test 7 |
+| 8. Panne de la base | hors chaîne | Test 8 |
+| Invariants | `invariant_ChainIsContinuous`, `invariant_StatusConsistency` | |
+
+Résultats détaillés et captures : [docs/RAPPORT_TESTS.md](docs/RAPPORT_TESTS.md).
 
 ## Déploiement sur Sepolia
 
-La configuration Sepolia est séparée de la démo Anvil : fichier `backend/.env.sepolia`, base `backend/data/sepolia.db`. La procédure pas à pas est dans le [guide d'utilisation](docs/GUIDE_UTILISATION.md#11-déployer-sur-sepolia-réseau-de-test-public).
+Le contrat est déployé sur Sepolia à l'adresse [`0xdc5352786b8c06e56ade97ea09b8678143d99214`](https://sepolia.etherscan.io/address/0xdc5352786b8c06e56ade97ea09b8678143d99214).
+
+La configuration Sepolia est indépendante de la démo locale (`backend/.env.sepolia`, base `backend/data/sepolia.db`) :
 
 ```bash
-cp backend/.env.sepolia.example backend/.env.sepolia
-```
-
-```bash
+cp backend/.env.sepolia.example backend/.env.sepolia   # puis compléter
 cast wallet import deployer --interactive
-```
-
-```bash
 node scripts/deploy-sepolia.mjs
-```
-
-```bash
 cd backend && npm run seed:sepolia && npm run start:sepolia
 ```
 
-Le script refuse les adresses Anvil (clés publiques) et ne lit jamais de clé privée : la signature passe par le keystore chiffré de Foundry. Les liens vers Etherscan s'affichent automatiquement pour les transactions Sepolia.
+Le script de déploiement refuse les adresses Anvil et ne lit jamais de clé privée en clair : la signature passe par le keystore chiffré de Foundry. Procédure complète dans le [guide d'utilisation](docs/GUIDE_UTILISATION.md#11-déployer-sur-sepolia-réseau-de-test-public).
 
 ## Exigences fonctionnelles
 
 | Réf. | Exigence | Réalisation |
 |---|---|---|
-| EF01 | Saisir un produit | Page *Nouvelle expédition*, `POST /shipments/prepare` |
-| EF02 | Numéro unique et incrémental | `registerShipment` : `expectedId == productCount + 1` |
+| EF01 | Saisie d'un produit | Page *Nouvelle expédition*, `POST /shipments/prepare` |
+| EF02 | Numéro unique et incrémental | `registerShipment` vérifie `expectedId == productCount + 1` |
 | EF03 | Empreinte SHA-256 | `backend/src/hash.js` |
 | EF04 | Ancrage de l'expédition | `registerShipment`, signé via MetaMask |
 | EF05 | Chaînage au produit précédent | `previousHash` vérifié par le contrat et inclus dans l'empreinte |
 | EF06 | Consultation par numéro | Page *Produit n°N*, recherche opérateur |
 | EF07 | Vérification d'intégrité | Bouton *Vérifier*, `GET /products/:n/verify` |
-| EF08 | Historique avec filtres | Page *Produits* (texte, statut, catégorie, période) |
-| EF09 | Gestion des acteurs autorisés | Page *Utilisateurs* (comptes + `setSupplier` / `setOperator`) |
-| EF10 | Suivi des transactions | Page *Transactions* (en attente / confirmée / échouée) |
+| EF08 | Historique filtrable | Page *Produits* (texte, statut, catégorie, période) |
+| EF09 | Gestion des acteurs autorisés | Page *Utilisateurs*, `setSupplier` / `setOperator` |
+| EF10 | Suivi des transactions | Page *Transactions* (en attente, confirmée, échouée) |
 | EF11 | Confirmation d'arrivée | `confirmArrival`, signé par l'opérateur |
-| EF12 | Statut non modifiable | Aucun champ ni route : le statut découle des événements |
+| EF12 | Statut non modifiable | Aucune route d'écriture : le statut découle des événements on-chain |
 
-## Variables d'environnement du backend
+## Documentation
 
-Voir [backend/.env.example](backend/.env.example).
+- [Architecture et choix de conception](docs/ARCHITECTURE.md)
+- [Diagrammes UML](docs/UML.md)
+- [Guide d'utilisation](docs/GUIDE_UTILISATION.md)
+- [Rapport de tests](docs/RAPPORT_TESTS.md)
+- [Scénario de démonstration](docs/SCENARIO_DEMO.md)

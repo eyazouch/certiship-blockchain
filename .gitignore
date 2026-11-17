@@ -26,3 +26,6 @@ docs/demo/video/
 # Livrables générés (Word, PDF, zip)
 rendu/
 contracts/broadcast/**/*.recovery.lock
+
+# Configuration locale de l'éditeur
+.claude/
