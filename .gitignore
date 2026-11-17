@@ -1,0 +1,28 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+!.env.sepolia.example
+*.db
+*.db-shm
+*.db-wal
+backend/data/
+
+# Foundry
+/cache/
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/31337/
+contracts/broadcast/**/dry-run/
+
+# État sauvegardé de la blockchain locale Anvil
+anvil-state.json
+
+# Vidéos de la démo (fichiers lourds)
+docs/demo/rushes/
+docs/demo/video/
+
+# Livrables générés (Word, PDF, zip)
+rendu/
+contracts/broadcast/**/*.recovery.lock

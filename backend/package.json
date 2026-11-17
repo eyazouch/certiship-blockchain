@@ -1,0 +1,25 @@
+{
+  "name": "shipment-certification-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "API Node.js : authentification, empreintes SHA-256, base SQLite et synchronisation avec le Smart Contract",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env src/server.js",
+    "dev": "node --watch --env-file-if-exists=.env src/server.js",
+    "seed": "node --env-file-if-exists=.env src/seed.js",
+    "seed:demo": "node --env-file-if-exists=.env src/seed.js --demo",
+    "start:sepolia": "node --env-file=.env.sepolia src/server.js",
+    "seed:sepolia": "node --env-file=.env.sepolia src/seed.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "viem": "^2.21.0"
+  }
+}
